@@ -1,4 +1,8 @@
+from unittest.mock import AsyncMock, patch
+
+import httpx
 from fastapi.testclient import TestClient
+from openai import RateLimitError
 
 from main import app
 
@@ -19,6 +23,10 @@ def main() -> None:
     assert config_body["model"]
     assert "OPENAI_API_KEY" not in config_body
 
+    dashboard_response = client.get("/dashboard/")
+    assert dashboard_response.status_code == 200
+    assert "Flight Control" in dashboard_response.text
+
     activate_response = client.post(
         "/api/scenarios/video_edge_routing/activate"
     )
@@ -30,6 +38,29 @@ def main() -> None:
 
     missing_run_response = client.get("/api/investigations/not_found")
     assert missing_run_response.status_code == 404
+
+    rate_limit_error = RateLimitError(
+        "credit limit reached",
+        response=httpx.Response(
+            429,
+            request=httpx.Request(
+                "POST",
+                "https://api.openai.com/v1/responses",
+            ),
+        ),
+        body=None,
+    )
+
+    with patch(
+        "main.execute_active_investigation",
+        new=AsyncMock(side_effect=rate_limit_error),
+    ), patch("main.logger.warning"):
+        rate_limit_response = client.post(
+            "/api/investigations/active/run"
+        )
+
+    assert rate_limit_response.status_code == 429
+    assert "billing" in rate_limit_response.json()["detail"].lower()
 
     print("FastAPI API 冒烟测试通过。")
 

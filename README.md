@@ -1,5 +1,9 @@
 # Flight Control
 
+[![CI](https://github.com/muhanye194-afk/flight-control/actions/workflows/ci.yml/badge.svg)](https://github.com/muhanye194-afk/flight-control/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.9%2B-335f70)
+[![License: MIT](https://img.shields.io/badge/License-MIT-397254.svg)](LICENSE)
+
 An evidence-first incident response workspace for investigating simulated P1 outages with specialist agents, structured GPT analysis, deterministic scoring, and human approval gates.
 
 Flight Control is designed as a reliability engineering portfolio project—not a general-purpose chatbot. It separates observed evidence from generated hypotheses and never executes production-changing actions automatically.
@@ -13,6 +17,13 @@ Flight Control is designed as a reliability engineering portfolio project—not 
 - A deterministic Evidence Judge that scores source quality, diversity, reliability, and counter-evidence.
 - A Policy Guard that blocks unsafe actions and routes high-risk changes to named human approval.
 - A responsive dashboard with both live GPT analysis and a no-cost offline demo.
+
+## Engineering decisions
+
+- **The model proposes; code decides.** GPT generates hypotheses, challenges, and remediation candidates, while a deterministic judge and policy layer make the final routing decisions.
+- **Every claim points back to evidence.** Structured outputs must reference evidence IDs already collected by specialist agents; unknown IDs are rejected instead of silently accepted.
+- **Live and deterministic paths stay separate.** The live path demonstrates model reasoning, while the offline path keeps interviews, development, and CI repeatable without API spend.
+- **Production changes stop at an approval boundary.** The demo records a named approval but never connects to production infrastructure or executes a proposed change.
 
 ## Decision flow
 
@@ -52,6 +63,8 @@ Add an OpenAI API key to `.env` for live analysis:
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-5.6-sol
+OPENAI_TIMEOUT_SECONDS=90
+OPENAI_MAX_RETRIES=2
 ```
 
 Start the API and dashboard:
@@ -69,13 +82,13 @@ The `.env` file is ignored by Git. Never commit or paste an API key into source 
 
 ## Tests
 
-The regression suite is intentionally runnable without `pytest`:
+The regression suite is intentionally runnable without `pytest` or an OpenAI key:
 
 ```bash
 python tests/run_all.py
 ```
 
-It covers specialist agents, evidence scoring, policy enforcement, run storage, the offline decision flow, and API smoke checks.
+It covers specialist agents, evidence scoring, policy enforcement, run storage, deterministic embeddings, the offline decision flow, and API smoke checks. GitHub Actions runs the same suite on every push and pull request.
 
 ## API highlights
 
@@ -91,6 +104,10 @@ It covers specialist agents, evidence scoring, policy enforcement, run storage, 
 ## Safety boundaries
 
 This repository uses simulated incidents and local scenario data. Generated remediation remains advisory. The Policy Guard can allow read-only observation, require approval for risky changes, or block unsafe proposals; it does not connect to or mutate production infrastructure.
+
+## Current scope and trade-offs
+
+This is a portfolio prototype with production-inspired boundaries, not a deployed incident-management service. Investigation runs and approvals are stored in memory, the API has no user authentication, and the scenarios use local fixtures rather than live telemetry. A production version would add durable storage, role-based access, secrets management, observability, model evaluations, and integrations with incident and deployment systems.
 
 ## Project structure
 

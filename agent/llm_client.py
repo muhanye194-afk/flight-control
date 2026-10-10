@@ -13,6 +13,10 @@ MODEL_NAME = os.getenv(
     "OPENAI_MODEL",
     "gpt-5.6-sol"
 )
+REQUEST_TIMEOUT_SECONDS = float(
+    os.getenv("OPENAI_TIMEOUT_SECONDS", "90")
+)
+MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -23,7 +27,10 @@ def get_openai_client() -> OpenAI:
             "未找到 OPENAI_API_KEY。请在 .env 中配置真实 Key。"
         )
 
-    return OpenAI()
+    return OpenAI(
+        timeout=REQUEST_TIMEOUT_SECONDS,
+        max_retries=MAX_RETRIES,
+    )
 
 
 def parse_structured_response(

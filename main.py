@@ -1,8 +1,17 @@
+import logging
 import os
+from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    OpenAIError,
+    RateLimitError,
+)
 from pydantic import BaseModel
 
 from agent.demo_mode import run_offline_demo
@@ -24,6 +33,10 @@ from scenario_registry import (
 )
 
 
+BASE_DIR = Path(__file__).resolve().parent
+logger = logging.getLogger(__name__)
+
+
 app = FastAPI(
     title="Flight Control API",
     description="Multi-Agent Reliability Operating System",
@@ -31,7 +44,7 @@ app = FastAPI(
 
 app.mount(
     "/dashboard",
-    StaticFiles(directory="dashboard", html=True),
+    StaticFiles(directory=BASE_DIR / "dashboard", html=True),
     name="dashboard",
 )
 
@@ -160,10 +173,35 @@ def get_payment_incident():
 
 @app.post("/api/investigations/active/run")
 async def run_active_investigation():
-    response = await execute_active_investigation()
-    response["execution_mode"] = "live_gpt"
-    response["model"] = MODEL_NAME
-    return response
+    try:
+        response = await execute_active_investigation()
+        response["execution_mode"] = "live_gpt"
+        response["model"] = MODEL_NAME
+        return response
+    except AuthenticationError as error:
+        logger.warning("OpenAI authentication failed")
+        raise HTTPException(
+            status_code=502,
+            detail="OpenAI authentication failed. Check the configured API key.",
+        ) from error
+    except RateLimitError as error:
+        logger.warning("OpenAI rate or credit limit reached")
+        raise HTTPException(
+            status_code=429,
+            detail="OpenAI rate or credit limit reached. Try again later or check billing.",
+        ) from error
+    except (APIConnectionError, APITimeoutError) as error:
+        logger.warning("OpenAI connection failed")
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI is temporarily unreachable. Please retry shortly.",
+        ) from error
+    except OpenAIError as error:
+        logger.exception("OpenAI request failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The live GPT analysis failed before a result was produced.",
+        ) from error
 
 
 @app.post("/api/demo/active-decision")
