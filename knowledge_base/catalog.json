@@ -1,0 +1,32 @@
+{
+  "runbooks/database_connection_pool.md": {
+    "domain": "payments",
+    "authority": "runbook",
+    "owner": "payment-platform"
+  },
+  "postmortems/payment_connection_pool_outage.md": {
+    "domain": "payments",
+    "authority": "postmortem",
+    "owner": "payment-platform"
+  },
+  "architecture/payment_system_architecture.md": {
+    "domain": "payments",
+    "authority": "architecture",
+    "owner": "payment-platform"
+  },
+  "policies/production_approval_policy.md": {
+    "domain": "global",
+    "authority": "policy",
+    "owner": "reliability-engineering"
+  },
+  "runbooks/video_edge_routing.md": {
+    "domain": "video-delivery",
+    "authority": "runbook",
+    "owner": "video-platform"
+  },
+  "runbooks/feed_cache_key_migration.md": {
+    "domain": "content-feed",
+    "authority": "runbook",
+    "owner": "feed-platform"
+  }
+}

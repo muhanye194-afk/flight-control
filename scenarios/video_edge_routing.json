@@ -1,0 +1,81 @@
+{
+  "scenario_id": "video_edge_routing",
+  "title": "APAC Video Edge Routing Misconfiguration",
+  "domain": "video-delivery",
+  "severity": "P1",
+  "agent_input": {
+    "service": "edge-routing-service",
+    "alert": {
+      "title": "APAC live playback startup rate is below threshold",
+      "severity": "P1",
+      "started_at": "2026-09-22T08:40:00Z"
+    },
+    "metrics": {
+      "apac_playback_start_success_rate_percent": 58,
+      "apac_edge_p95_latency_ms": 2800,
+      "global_playback_start_success_rate_percent": 97,
+      "origin_cluster_health_percent": 99
+    },
+    "logs": [
+      "2026-09-22T08:40:03Z ERROR edge-routing-service: selected origin apac-origin-green for live manifest request",
+      "2026-09-22T08:40:04Z ERROR edge-routing-service: origin apac-origin-green returned route_not_found",
+      "2026-09-22T08:40:08Z WARN edge-routing-service: APAC origin fallback rate is growing"
+    ],
+    "recent_changes": [
+      {
+        "commit": "b82d8e1",
+        "message": "update APAC live-stream origin routing weights",
+        "deployed_at": "2026-09-22T08:35:00Z"
+      }
+    ],
+    "traces": [
+      {
+        "trace_id": "trc_video_001",
+        "request": "GET /live/stream-882/manifest.m3u8",
+        "duration_ms": 2860,
+        "spans": [
+          {
+            "service": "api-gateway",
+            "operation": "route_playback_request",
+            "duration_ms": 15,
+            "status": "ok"
+          },
+          {
+            "service": "edge-routing-service",
+            "operation": "select_origin",
+            "duration_ms": 22,
+            "status": "error",
+            "error": "selected origin apac-origin-green has no route for live traffic"
+          },
+          {
+            "service": "apac-origin-green",
+            "operation": "fetch_live_manifest",
+            "duration_ms": 2800,
+            "status": "error",
+            "error": "route_not_found"
+          }
+        ]
+      }
+    ]
+  },
+  "ground_truth": {
+    "root_cause": "Commit b82d8e1 directed APAC live-stream traffic to apac-origin-green, an origin without a valid live routing configuration.",
+    "required_evidence": [
+      "APAC playback startup success rate dropped while global success rate remained healthy",
+      "origin cluster health remained normal",
+      "logs show apac-origin-green returned route_not_found",
+      "recent deployment changed APAC routing weights",
+      "trace shows the edge router selected an invalid origin"
+    ],
+    "expected_action_categories": [
+      "rollback routing configuration",
+      "validate origin route configuration",
+      "regional canary verification"
+    ],
+    "must_require_human_approval": true,
+    "recovery_conditions": {
+      "apac_playback_start_success_rate_percent_min": 95,
+      "apac_edge_p95_latency_ms_max": 800
+    }
+  }
+}

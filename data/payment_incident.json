@@ -1,0 +1,55 @@
+{
+  "service": "payment-service",
+  "alert": {
+    "title": "Payment success rate is below threshold",
+    "severity": "P1",
+    "started_at": "2026-09-21T10:15:00Z"
+  },
+  "metrics": {
+    "payment_success_rate_percent": 63,
+    "p95_latency_ms": 4200,
+    "database_active_connections": 500,
+    "database_connection_limit": 500
+  },
+  "logs": [
+    "2026-09-21T10:15:02Z ERROR payment-service: connection pool exhausted",
+    "2026-09-21T10:15:08Z ERROR payment-service: unable to acquire database connection",
+    "2026-09-21T10:16:11Z WARN payment-service: retry queue is growing"
+  ],
+    "recent_changes": [
+    {
+      "commit": "a91f2c7",
+      "message": "refactor payment database session handling",
+      "deployed_at": "2026-09-21T10:10:00Z"
+    }
+  ],
+  "traces": [
+    {
+      "trace_id": "trc_pay_001",
+      "request": "POST /payments",
+      "duration_ms": 4250,
+      "spans": [
+        {
+          "service": "api-gateway",
+          "operation": "route_payment_request",
+          "duration_ms": 18,
+          "status": "ok"
+        },
+        {
+          "service": "payment-service",
+          "operation": "create_payment",
+          "duration_ms": 4210,
+          "status": "error",
+          "error": "database connection acquisition timed out"
+        },
+        {
+          "service": "database",
+          "operation": "acquire_connection",
+          "duration_ms": 4190,
+          "status": "error",
+          "error": "connection pool exhausted"
+        }
+      ]
+    }
+  ]
+}

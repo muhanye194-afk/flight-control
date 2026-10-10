@@ -1,0 +1,85 @@
+{
+  "scenario_id": "feed_cache_cascade",
+  "title": "Feed Cache Key Migration Caused Database Cascade",
+  "domain": "content-feed",
+  "severity": "P1",
+  "agent_input": {
+    "service": "feed-service",
+    "alert": {
+      "title": "Feed request latency and error rate are above threshold",
+      "severity": "P1",
+      "started_at": "2026-09-23T14:05:00Z"
+    },
+    "metrics": {
+      "feed_error_rate_percent": 24,
+      "feed_p95_latency_ms": 3100,
+      "cache_hit_rate_percent": 3,
+      "redis_cpu_percent": 92,
+      "database_query_p95_latency_ms": 2600
+    },
+    "logs": [
+      "2026-09-23T14:05:02Z WARN feed-service: cache miss rate exceeded 95 percent",
+      "2026-09-23T14:05:06Z ERROR feed-service: database query timed out while loading feed candidates",
+      "2026-09-23T14:05:12Z WARN redis: command queue length is growing"
+    ],
+    "recent_changes": [
+      {
+        "commit": "c34f9aa",
+        "message": "migrate feed cache key format to v2 namespace",
+        "deployed_at": "2026-09-23T14:00:00Z"
+      }
+    ],
+    "traces": [
+      {
+        "trace_id": "trc_feed_001",
+        "request": "GET /feed?user_id=8821",
+        "duration_ms": 3180,
+        "spans": [
+          {
+            "service": "feed-service",
+            "operation": "get_feed",
+            "duration_ms": 3160,
+            "status": "error",
+            "error": "database query timed out after cache miss"
+          },
+          {
+            "service": "redis-cache",
+            "operation": "get_feed_candidates",
+            "duration_ms": 45,
+            "status": "ok",
+            "error": "cache_miss_for_v2_key"
+          },
+          {
+            "service": "feed-database",
+            "operation": "query_feed_candidates",
+            "duration_ms": 3050,
+            "status": "error",
+            "error": "query timed out under elevated load"
+          }
+        ]
+      }
+    ]
+  },
+  "ground_truth": {
+    "root_cause": "Commit c34f9aa changed the feed cache-key namespace without migration compatibility, causing a cache-miss storm and database overload.",
+    "required_evidence": [
+      "cache hit rate dropped to 3 percent",
+      "cache miss rate exceeded 95 percent in logs",
+      "recent deployment migrated feed cache keys to v2",
+      "trace shows database timeout happened after a cache miss",
+      "Redis and database pressure are downstream symptoms"
+    ],
+    "expected_action_categories": [
+      "rollback cache key migration",
+      "restore backward-compatible cache reads",
+      "verify cache hit rate in staging",
+      "canary release"
+    ],
+    "must_require_human_approval": true,
+    "recovery_conditions": {
+      "feed_error_rate_percent_max": 2,
+      "feed_p95_latency_ms_max": 800,
+      "cache_hit_rate_percent_min": 85
+    }
+  }
+}

@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flight Control</title>
+
+  <style>
+    :root {
+      --canvas: #f1f0eb;
+      --paper: #fbfaf7;
+      --paper-strong: #ffffff;
+      --ink: #171917;
+      --muted: #6c706b;
+      --faint: #92958f;
+      --line: #d8d6cf;
+      --line-strong: #b8b5ad;
+      --accent: #ad3f2c;
+      --accent-soft: #f4e7e2;
+      --blue: #335f70;
+      --blue-soft: #e8eff1;
+      --green: #397254;
+      --green-soft: #e7f0e9;
+      --amber: #8b6422;
+      --amber-soft: #f4eddd;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--canvas); }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    .app { max-width: 1500px; margin: 0 auto; padding: 22px 28px 48px; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      min-height: 78px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 3px;
+      color: var(--paper);
+      background: var(--ink);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -.04em;
+    }
+
+    .eyebrow {
+      margin: 0 0 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1 { margin: 0; font-size: 24px; font-weight: 680; letter-spacing: -.035em; }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .pill, .severity, .decision-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .35);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: .01em;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .api-offline { color: var(--accent); border-color: #d9a69b; background: var(--accent-soft); }
+    .api-offline .dot { background: var(--accent); }
+
+    .offline { color: var(--amber); border-color: #cbbb98; background: var(--amber-soft); }
+    .model-status { color: var(--blue); border-color: #9db3bc; background: var(--blue-soft); }
+
+    .button {
+      min-height: 36px;
+      padding: 8px 13px;
+      border: 1px solid var(--ink);
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--ink);
+      background: transparent;
+      font-size: 12px;
+      font-weight: 700;
+      transition: background .15s ease, color .15s ease, transform .15s ease;
+    }
+
+    .button:hover { transform: translateY(-1px); }
+    .button:disabled { cursor: wait; opacity: .55; transform: none; }
+
+    .demo-button { color: var(--paper); background: var(--ink); }
+    .demo-button:hover { background: #313431; }
+    .refresh-button { border-color: var(--line-strong); background: var(--paper); }
+    .refresh-button:hover { border-color: var(--ink); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .panel, .sidebar {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--paper);
+      box-shadow: 0 1px 0 rgba(24, 25, 23, .03);
+    }
+
+    .panel { padding: 18px; }
+
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 14px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 13px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head h2 { margin: 0; font-size: 13px; font-weight: 720; letter-spacing: -.01em; }
+    .section-head span { color: var(--faint); font-size: 10px; }
+
+    .scenario-list, .agent-list, .change-list, .signal-list, .action-list { display: grid; gap: 7px; }
+
+    .scenario-button {
+      width: 100%;
+      padding: 12px 11px;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      transition: background .15s ease, border-color .15s ease;
+    }
+
+    .scenario-button:hover { border-color: var(--line); background: var(--paper-strong); }
+
+    .scenario-button.active {
+      border-color: var(--ink);
+      color: var(--paper);
+      background: var(--ink);
+    }
+
+    .scenario-title { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 680; }
+    .scenario-meta { display: flex; justify-content: space-between; color: var(--faint); font-size: 10px; }
+    .scenario-button.active .scenario-meta { color: #b9bcb7; }
+
+    .side-note {
+      margin: 18px 2px 3px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.55;
+    }
+
+    .error {
+      display: none;
+      margin-bottom: 14px;
+      padding: 11px 13px;
+      border: 1px solid #d9a69b;
+      border-radius: 3px;
+      color: #7f291c;
+      background: var(--accent-soft);
+      font-size: 12px;
+    }
+
+    .error.show { display: block; }
+
+    .hero {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 180px;
+      margin-bottom: 14px;
+      padding: 24px;
+      overflow: hidden;
+      border-top: 3px solid var(--accent);
+    }
+
+    .hero::after {
+      position: absolute;
+      right: -16px;
+      bottom: -42px;
+      color: #eceae4;
+      content: "01";
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 150px;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .hero > * { position: relative; z-index: 1; }
+
+    .label {
+      margin: 0 0 18px;
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .incident-title {
+      max-width: 780px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(30px, 4vw, 48px);
+      font-weight: 500;
+      letter-spacing: -.035em;
+      line-height: 1.02;
+    }
+
+    .incident-service { margin: 18px 0 0; color: var(--muted); font-size: 12px; }
+    .incident-status { min-width: 145px; text-align: right; }
+
+    .severity {
+      min-height: 30px;
+      border-color: var(--accent);
+      color: var(--paper);
+      background: var(--accent);
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    .updated { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric { min-height: 118px; padding: 15px; border-top: 2px solid var(--ink); }
+    .metric-name { min-height: 28px; color: var(--muted); font-size: 10px; font-weight: 650; }
+    .metric-value { margin: 12px 0 14px; font-family: Georgia, "Times New Roman", serif; font-size: 30px; line-height: 1; }
+
+    .track { height: 3px; overflow: hidden; background: #e2e0da; }
+    .fill { height: 100%; background: var(--accent); }
+
+    .two-column, .bottom-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.16fr) minmax(300px, .84fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .agent, .change, .signal, .action {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 10px 2px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .agent:last-child, .change:last-child, .signal:last-child, .action:last-child { border-bottom: 0; }
+
+    .agent-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--ink);
+      background: var(--paper-strong);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .item-copy { min-width: 0; flex: 1; }
+    .item-title { overflow: hidden; font-size: 12px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+    .item-meta { margin-top: 3px; color: var(--faint); font-size: 10px; }
+    .verified { color: var(--green); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .verified[data-state="ready"] { color: var(--faint); }
+    .verified[data-state="running"] { color: var(--amber); }
+    .verified[data-state="complete"] { color: var(--green); }
+    .commit { min-width: 62px; color: var(--blue); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; font-weight: 700; }
+
+    .signal-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--amber); }
+    .signal.is-error {
+      padding: 10px;
+      border: 1px solid #d9a69b;
+      border-radius: 2px;
+      color: #7f291c;
+      background: var(--accent-soft);
+    }
+
+    .signal.is-error .signal-dot { background: var(--accent); }
+
+    .decision-panel { margin-bottom: 14px; border-top: 3px solid var(--blue); }
+
+    .decision-state {
+      min-height: 26px;
+      padding: 5px 8px;
+      border-color: #cbbb98;
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .decision-state.ready { border-color: #9fbea9; color: var(--green); background: var(--green-soft); }
+
+    .decision-empty {
+      padding: 30px 20px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: var(--paper-strong);
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.7;
+      text-align: center;
+    }
+
+    .decision-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .72fr); gap: 10px; }
+
+    .root-cause, .score-card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: var(--paper-strong);
+    }
+
+    .score-card { background: var(--blue-soft); }
+
+    .small-label {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 760;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .root-cause h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 22px; font-weight: 500; }
+    .root-cause p:last-child, .score-card p:last-child { color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .score-number { margin: 7px 0 13px; color: var(--blue); font-family: Georgia, "Times New Roman", serif; font-size: 38px; }
+
+    .approval-banner {
+      margin-top: 10px;
+      padding: 11px 12px;
+      border-left: 3px solid var(--amber);
+      color: #5f471e;
+      background: var(--amber-soft);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.5;
+    }
+
+    .action-heading {
+      display: flex;
+      justify-content: space-between;
+      margin: 18px 0 4px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 760;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .action-badge {
+      padding: 4px 7px;
+      border: 1px solid #cbbb98;
+      border-radius: 2px;
+      color: var(--amber);
+      background: var(--amber-soft);
+      font-size: 9px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .action-badge.approved { border-color: #9fbea9; color: var(--green); background: var(--green-soft); }
+
+    .approval-form { display: flex; gap: 8px; margin-top: 14px; }
+
+    .approver-input {
+      min-width: 0;
+      flex: 1;
+      padding: 9px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      outline: none;
+      color: var(--ink);
+      background: var(--paper-strong);
+      font-size: 12px;
+    }
+
+    .notice, .safety { padding: 13px; border-left: 3px solid var(--green); background: var(--green-soft); }
+    .notice strong { display: block; margin-bottom: 6px; color: var(--green); font-size: 11px; }
+    .notice p, .safety p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .safety { margin-top: 9px; border-left-color: var(--amber); background: var(--amber-soft); }
+    .safety strong { color: var(--amber); font-size: 11px; }
+    .empty { color: var(--faint); font-size: 11px; }
+
+    @media (max-width: 1080px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .scenario-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .side-note { display: none; }
+    }
+
+    @media (max-width: 760px) {
+      .app { padding: 14px 14px 32px; }
+      .topbar, .hero { align-items: stretch; flex-direction: column; }
+      .top-actions, .incident-status { justify-content: flex-start; text-align: left; }
+      .hero { min-height: 0; padding: 20px; }
+      .hero::after { display: none; }
+      .scenario-list, .metrics, .two-column, .bottom-grid, .decision-grid { grid-template-columns: 1fr; }
+      .approval-form { flex-direction: column; }
+      .item-title { white-space: normal; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">FC</div>
+        <div>
+          <p class="eyebrow">Incident response workspace</p>
+          <h1>Flight Control</h1>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <span id="api-status" class="pill api-offline">
+          <span class="dot"></span>
+          <span id="api-status-text">Connecting to local API</span>
+        </span>
+        <span id="model-status" class="pill model-status">Checking GPT connection</span>
+        <button id="live-button" class="button demo-button">Run GPT analysis</button>
+        <button id="demo-button" class="button refresh-button">Run offline demo</button>
+        <button id="refresh-button" class="button refresh-button">Refresh</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="sidebar">
+        <div class="section-head">
+          <h2>Incident scenarios</h2>
+          <span id="scenario-count">0</span>
+        </div>
+
+        <div id="scenario-list" class="scenario-list">
+          <p class="empty">Loading scenarios…</p>
+        </div>
+
+        <p class="side-note">
+          Scenario changes stay in this local workspace. Production systems remain untouched.
+        </p>
+      </aside>
+
+      <section>
+        <div id="error-banner" class="error"></div>
+
+        <article class="panel hero">
+          <div>
+            <p class="label">Scenario input · Priority one</p>
+            <h2 id="incident-title" class="incident-title">Loading incident…</h2>
+            <p id="incident-service" class="incident-service">Waiting for API data</p>
+          </div>
+
+          <div class="incident-status">
+            <span id="incident-severity" class="severity">P1</span>
+            <p id="last-updated" class="updated">Not refreshed yet</p>
+          </div>
+        </article>
+
+        <section id="metrics" class="metrics"></section>
+
+        <section class="two-column">
+          <article class="panel">
+            <div class="section-head">
+              <h2>Investigation team</h2>
+              <span id="investigation-summary">analysis not run</span>
+            </div>
+
+            <div class="agent-list">
+              <div class="agent">
+                <div class="agent-icon">O</div>
+                <div class="item-copy">
+                  <div class="item-title">Observability review</div>
+                  <div class="item-meta">Metrics, logs and traces</div>
+                </div>
+                <div class="verified" data-investigation-status data-state="ready">ready</div>
+              </div>
+
+              <div class="agent">
+                <div class="agent-icon">C</div>
+                <div class="item-copy">
+                  <div class="item-title">Change intelligence</div>
+                  <div class="item-meta">Release correlation and timeline</div>
+                </div>
+                <div class="verified" data-investigation-status data-state="ready">ready</div>
+              </div>
+
+              <div class="agent">
+                <div class="agent-icon">R</div>
+                <div class="item-copy">
+                  <div class="item-title">Knowledge retrieval</div>
+                  <div class="item-meta">Runbooks and domain-specific context</div>
+                </div>
+                <div class="verified" data-investigation-status data-state="ready">ready</div>
+              </div>
+
+              <div class="agent">
+                <div class="agent-icon">J</div>
+                <div class="item-copy">
+                  <div class="item-title">Evidence and policy review</div>
+                  <div class="item-meta">Weighted findings and approval gate</div>
+                </div>
+                <div class="verified" data-investigation-status data-state="ready">ready</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <h2>Recent changes</h2>
+              <span>scenario input</span>
+            </div>
+
+            <div id="change-list" class="change-list">
+              <p class="empty">No deployment data yet.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel decision-panel">
+          <div class="section-head">
+            <h2>Analysis output</h2>
+            <span id="decision-state" class="decision-state">Awaiting analysis</span>
+          </div>
+
+          <div id="decision-content" class="decision-empty">
+            Scenario evidence is loaded above. Run GPT analysis for a live decision, or use the offline demo.
+          </div>
+        </section>
+
+        <section class="bottom-grid">
+          <article class="panel">
+            <div class="section-head">
+              <h2>Incident signals</h2>
+              <span>scenario input</span>
+            </div>
+
+            <div id="signal-list" class="signal-list">
+              <p class="empty">No logs available.</p>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <h2>Review controls</h2>
+              <span>execution boundaries</span>
+            </div>
+
+            <div class="notice">
+              <strong>Offline checks passed</strong>
+              <p>
+                Three scenarios validated evidence scoring, policy checks and approval records.
+              </p>
+            </div>
+
+            <div class="safety">
+              <strong>Assistance remains advisory.</strong>
+              <p>
+                Any production-changing action still requires a named human approver.
+              </p>
+            </div>
+          </article>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const scenarioList = $("scenario-list");
+    const scenarioCount = $("scenario-count");
+    const metrics = $("metrics");
+    const signalList = $("signal-list");
+    const changeList = $("change-list");
+    const refreshButton = $("refresh-button");
+    const demoButton = $("demo-button");
+    const liveButton = $("live-button");
+    const errorBanner = $("error-banner");
+    const decisionContent = $("decision-content");
+    const decisionState = $("decision-state");
+    const apiStatus = $("api-status");
+    const apiStatusText = $("api-status-text");
+    const modelStatus = $("model-status");
+    const investigationSummary = $("investigation-summary");
+    let liveAnalysisAvailable = false;
+
+    function setInvestigationStatus(state) {
+      const copy = {
+        ready: { label: "ready", summary: "analysis not run" },
+        running: { label: "running", summary: "reviewing scenario evidence" },
+        complete: { label: "complete", summary: "analysis complete" },
+      }[state];
+
+      document.querySelectorAll("[data-investigation-status]").forEach((item) => {
+        item.dataset.state = state;
+        item.textContent = copy.label;
+      });
+
+      investigationSummary.textContent = copy.summary;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function humanize(value) {
+      return String(value ?? "")
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    }
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.add("show");
+    }
+
+    function clearError() {
+      errorBanner.textContent = "";
+      errorBanner.classList.remove("show");
+    }
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, options);
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail || `Request failed: ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    function resetDecisionPanel() {
+      setInvestigationStatus("ready");
+      decisionState.textContent = "Awaiting analysis";
+      decisionState.classList.remove("ready");
+
+      decisionContent.className = "decision-empty";
+      decisionContent.innerHTML = `
+        Scenario evidence is loaded above. Run GPT analysis for a live decision, or use the offline demo.
+      `;
+    }
+
+    function renderScenarios(scenarios, activeScenario) {
+      const activeId = activeScenario?.scenario_id;
+      scenarioCount.textContent = `${scenarios.length} ready`;
+
+      scenarioList.innerHTML = scenarios.map((scenario) => `
+        <button
+          class="scenario-button ${scenario.scenario_id === activeId ? "active" : ""}"
+          data-scenario-id="${escapeHtml(scenario.scenario_id)}"
+        >
+          <span class="scenario-title">${escapeHtml(scenario.title)}</span>
+          <span class="scenario-meta">
+            <span>${escapeHtml(scenario.domain)}</span>
+            <span>${escapeHtml(scenario.severity)}</span>
+          </span>
+        </button>
+      `).join("");
+
+      document.querySelectorAll(".scenario-button").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            button.disabled = true;
+            clearError();
+
+            await requestJson(
+              `/api/scenarios/${button.dataset.scenarioId}/activate`,
+              { method: "POST" }
+            );
+
+            resetDecisionPanel();
+            await loadDashboard();
+          } catch (error) {
+            showError(`Unable to switch scenario. ${error.message}`);
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    }
+
+    function renderIncident(incident) {
+      const alert = incident.alert || {};
+
+      $("incident-title").textContent = alert.title || "Untitled incident";
+      $("incident-service").textContent =
+        `${incident.service || "unknown-service"} · ${alert.started_at || "timestamp unavailable"}`;
+
+      $("incident-severity").textContent = alert.severity || "P1";
+      $("last-updated").textContent =
+        `Refreshed ${new Date().toLocaleTimeString()}`;
+
+      metrics.innerHTML = Object.entries(incident.metrics || {})
+        .slice(0, 4)
+        .map(([name, value]) => {
+          const number = Number(value);
+          const width = Number.isFinite(number)
+            ? Math.min(Math.max(Math.abs(number), 12), 100)
+            : 42;
+
+          return `
+            <article class="panel metric">
+              <div class="metric-name">${escapeHtml(humanize(name))}</div>
+              <div class="metric-value">${escapeHtml(value)}</div>
+              <div class="track"><div class="fill" style="width: ${width}%"></div></div>
+            </article>
+          `;
+        })
+        .join("");
+
+      signalList.innerHTML = (incident.logs || [])
+        .slice(0, 4)
+        .map((log) => `
+          <div class="signal ${String(log).includes("ERROR") ? "is-error" : ""}">
+            <span class="signal-dot"></span>
+            <div class="item-copy">
+              <div class="item-title">${escapeHtml(log)}</div>
+              <div class="item-meta">
+                ${String(log).includes("ERROR") ? "Error signal" : "Warning signal"}
+              </div>
+            </div>
+          </div>
+        `)
+        .join("") || `<p class="empty">No logs available.</p>`;
+
+      changeList.innerHTML = (incident.recent_changes || [])
+        .map((change) => `
+          <div class="change">
+            <span class="commit">${escapeHtml(change.commit || "n/a")}</span>
+            <div class="item-copy">
+              <div class="item-title">${escapeHtml(change.message || "No message")}</div>
+              <div class="item-meta">${escapeHtml(change.deployed_at || "Time unavailable")}</div>
+            </div>
+          </div>
+        `)
+        .join("") || `<p class="empty">No recent changes available.</p>`;
+    }
+
+    function renderDecision(data) {
+      const selectedId = data.selected_hypothesis_id;
+      const hypothesis = (data.hypotheses || []).find(
+        (item) => item.hypothesis_id === selectedId
+      );
+
+      const judgeScore = (data.judge_scores || []).find(
+        (item) => item.hypothesis_id === selectedId
+      );
+
+      const scorePercent = Math.round((judgeScore?.final_score ?? 0) * 100);
+
+      const policyByAction = Object.fromEntries(
+        (data.policy_decisions || []).map((item) => [
+          item.action_id,
+          item.decision,
+        ])
+      );
+
+      const approvedIds = new Set(data.approved_action_ids || []);
+
+      const pendingApproval = (data.proposed_actions || []).find(
+        (action) =>
+          policyByAction[action.action_id] === "requires_approval" &&
+          !approvedIds.has(action.action_id)
+      );
+
+      const actions = (data.proposed_actions || []).map((action) => {
+        const policy = policyByAction[action.action_id] || "unknown";
+        const approved = approvedIds.has(action.action_id);
+
+        return `
+          <div class="action">
+            <div class="item-copy">
+              <div class="item-title">${escapeHtml(action.description)}</div>
+              <div class="item-meta">
+                ${escapeHtml(humanize(action.category))}
+                · ${escapeHtml(action.risk_level)} risk
+              </div>
+            </div>
+
+            <span class="action-badge ${approved || policy === "allowed" ? "approved" : ""}">
+              ${escapeHtml(humanize(approved ? "approved by human" : policy))}
+            </span>
+          </div>
+        `;
+      }).join("");
+
+      const liveRun = data.execution_mode === "live_gpt";
+      decisionState.textContent = liveRun
+        ? `${data.model || "GPT"} decision ready`
+        : "Offline decision ready";
+      decisionState.classList.add("ready");
+      setInvestigationStatus("complete");
+
+      decisionContent.className = "";
+      decisionContent.innerHTML = `
+        <div class="decision-grid">
+          <article class="root-cause">
+            <p class="small-label">Leading root cause</p>
+            <h3>${escapeHtml(humanize(selectedId || "unknown"))}</h3>
+            <p>${escapeHtml(hypothesis?.statement || "No selected hypothesis returned.")}</p>
+          </article>
+
+          <article class="score-card">
+            <p class="small-label">Evidence confidence</p>
+            <div class="score-number">${scorePercent}%</div>
+            <div class="track"><div class="fill" style="width: ${scorePercent}%"></div></div>
+            <p>Weighted by source quality, diversity, reliability and counter-evidence.</p>
+          </article>
+        </div>
+
+        <div class="approval-banner">
+          ${
+            pendingApproval
+              ? "Human approval required before any production-changing action."
+              : "Approval recorded. No production action was executed automatically."
+          }
+        </div>
+
+        <div class="action-heading">
+          <span>Proposed actions</span>
+          <span>${escapeHtml(data.phase || "unknown")}</span>
+        </div>
+
+        <div class="action-list">${actions}</div>
+
+        ${
+          pendingApproval
+            ? `
+              <div class="approval-form">
+                <input
+                  id="approver-input"
+                  class="approver-input"
+                  value="muhanye"
+                  placeholder="Approver name"
+                />
+
+                <button id="approval-button" class="button demo-button">
+                  Record approval
+                </button>
+              </div>
+            `
+            : ""
+        }
+      `;
+
+      const approvalButton = $("approval-button");
+
+      if (approvalButton && pendingApproval) {
+        approvalButton.addEventListener("click", () => {
+          approveAction(
+            data.run_id,
+            pendingApproval.action_id,
+            $("approver-input").value.trim()
+          );
+        });
+      }
+    }
+
+    async function approveAction(runId, actionId, approver) {
+      if (!approver) {
+        showError("Please enter an approver name.");
+        return;
+      }
+
+      try {
+        clearError();
+
+        const approvalButton = $("approval-button");
+        approvalButton.disabled = true;
+        approvalButton.textContent = "Recording approval…";
+
+        const result = await requestJson(
+          `/api/investigations/${runId}/approve`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action_ids: [actionId],
+              approver: approver,
+            }),
+          }
+        );
+
+        renderDecision(result);
+      } catch (error) {
+        showError(`Approval failed. ${error.message}`);
+      }
+    }
+
+    async function loadDashboard() {
+      try {
+        refreshButton.disabled = true;
+        refreshButton.textContent = "Refreshing…";
+        clearError();
+
+        const [scenarioData, incident, config] = await Promise.all([
+          requestJson("/api/scenarios"),
+          requestJson("/api/incidents/active"),
+          requestJson("/api/config"),
+        ]);
+
+        renderScenarios(
+          scenarioData.scenarios || [],
+          scenarioData.active_scenario
+        );
+
+        renderIncident(incident);
+
+        apiStatus.classList.remove("api-offline");
+        apiStatusText.textContent = "Local API online";
+
+        liveAnalysisAvailable = Boolean(config.live_analysis_available);
+        liveButton.disabled = !liveAnalysisAvailable;
+        modelStatus.textContent = liveAnalysisAvailable
+          ? `${config.model} connected`
+          : "GPT key not configured";
+      } catch (error) {
+        apiStatus.classList.add("api-offline");
+        apiStatusText.textContent = "Local API offline";
+
+        if (window.location.protocol === "file:") {
+          showError(
+            "This dashboard cannot run as a local file. Start FastAPI, then open http://127.0.0.1:8001/dashboard/."
+          );
+        } else {
+          showError("The local API is not reachable. Keep the FastAPI server running.");
+        }
+      } finally {
+        refreshButton.disabled = false;
+        refreshButton.textContent = "Refresh";
+      }
+    }
+
+    async function runOfflineDemo() {
+      try {
+        clearError();
+
+        demoButton.disabled = true;
+        demoButton.textContent = "Reviewing evidence…";
+        setInvestigationStatus("running");
+
+        decisionState.textContent = "Investigating";
+        decisionState.classList.remove("ready");
+
+        decisionContent.className = "decision-empty";
+        decisionContent.textContent =
+          "Collecting signals, recent changes and runbook evidence. Policy checks will follow…";
+
+        const result = await requestJson("/api/demo/active-decision", {
+          method: "POST",
+        });
+
+        renderDecision(result);
+      } catch (error) {
+        resetDecisionPanel();
+        showError(`Offline Demo failed. ${error.message}`);
+      } finally {
+        demoButton.disabled = false;
+        demoButton.textContent = "Run offline demo";
+      }
+    }
+
+    async function runLiveAnalysis() {
+      try {
+        clearError();
+
+        liveButton.disabled = true;
+        demoButton.disabled = true;
+        liveButton.textContent = "GPT is reviewing…";
+        setInvestigationStatus("running");
+
+        decisionState.textContent = "Live investigation";
+        decisionState.classList.remove("ready");
+
+        decisionContent.className = "decision-empty";
+        decisionContent.textContent =
+          "GPT is comparing evidence, challenging hypotheses and preparing a guarded response plan…";
+
+        const result = await requestJson("/api/investigations/active/run", {
+          method: "POST",
+        });
+
+        renderDecision(result);
+      } catch (error) {
+        resetDecisionPanel();
+        showError(`GPT analysis failed. ${error.message}`);
+      } finally {
+        liveButton.disabled = !liveAnalysisAvailable;
+        demoButton.disabled = false;
+        liveButton.textContent = "Run GPT analysis";
+      }
+    }
+
+    refreshButton.addEventListener("click", loadDashboard);
+    demoButton.addEventListener("click", runOfflineDemo);
+    liveButton.addEventListener("click", runLiveAnalysis);
+
+    resetDecisionPanel();
+    loadDashboard();
+  </script>
+</body>
+</html>
