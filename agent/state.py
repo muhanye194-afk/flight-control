@@ -8,7 +8,10 @@ from agent.contracts import (
     Hypothesis,
     HypothesisChallenge,
     HypothesisScore,
+    InvestigationCheckpoint,
     PolicyDecision,
+    ReasoningStep,
+    ReliabilityMetrics,
     RemediationAction,
 )
 
@@ -46,6 +49,10 @@ class InvestigationState(BaseModel):
 
     tool_trace: List[Dict[str, str]] = Field(default_factory=list)
     audit_log: List[str] = Field(default_factory=list)
+
+    reasoning_steps: List[ReasoningStep] = Field(default_factory=list)
+    checkpoints: List[InvestigationCheckpoint] = Field(default_factory=list)
+    reliability_metrics: Optional[ReliabilityMetrics] = None
 
     human_approval_required: bool = True
     approved_action_ids: List[str] = Field(default_factory=list)

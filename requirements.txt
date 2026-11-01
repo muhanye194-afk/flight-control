@@ -3,7 +3,8 @@ uvicorn[standard]==0.39.0
 pydantic==2.13.5
 python-dotenv==1.2.1
 openai==2.48.0
-numpy==2.0.2
+numpy==2.0.2; python_version < "3.13"
+numpy==2.2.6; python_version >= "3.13"
 rank-bm25==0.2.2
 sentence-transformers==5.1.2
 httpx==0.28.1

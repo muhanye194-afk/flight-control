@@ -53,6 +53,21 @@ DEMO_SCENARIOS: Dict[str, Dict[str, Any]] = {
             "数据库超时和 Redis 队列压力停止增长。",
         ],
     },
+    "recommender_shilling_attack": {
+        "hypothesis_id": "recommendation_shilling_attack",
+        "statement": (
+            "协同虚假账户通过同步交互提升目标商品曝光，"
+            "并压缩了推荐目录覆盖率。"
+        ),
+        "rollback_description": (
+            "在沙箱和 canary 验证后隔离可疑账户并重建受污染特征。"
+        ),
+        "verification_plan": [
+            "目标商品曝光率下降到 8% 以下。",
+            "目录覆盖率恢复到 65% 以上。",
+            "可疑账户占比下降到 1% 以下。",
+        ],
+    },
 }
 
 

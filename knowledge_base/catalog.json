@@ -28,5 +28,10 @@
     "domain": "content-feed",
     "authority": "runbook",
     "owner": "feed-platform"
+  },
+  "runbooks/recommender_shilling_attack.md": {
+    "domain": "recommender-systems",
+    "authority": "runbook",
+    "owner": "recommendation-safety"
   }
 }

@@ -10,13 +10,15 @@ Flight Control is designed as a reliability engineering portfolio project—not 
 
 ## What it demonstrates
 
-- Three incident scenarios covering payments, video edge routing, and feed caching.
+- Four incident scenarios covering payments, video edge routing, feed caching, and recommender-system shilling attacks.
 - Parallel specialist review of metrics, logs, traces, recent changes, and runbooks.
 - Domain-scoped hybrid retrieval so unrelated operational knowledge does not leak between scenarios.
 - GPT-5.6 structured outputs for competing hypotheses, skeptical review, and remediation planning.
 - A deterministic Evidence Judge that scores source quality, diversity, reliability, and counter-evidence.
 - A Policy Guard that blocks unsafe actions and routes high-risk changes to named human approval.
 - A responsive dashboard with both live GPT analysis and a no-cost offline demo.
+- A deterministic long-horizon recommender-safety loop with 10, 20, or 50 reasoning steps, checkpoint rollback, sandbox canary actions, and delayed-feedback verification.
+- A seeded reliability benchmark comparing an unguarded baseline with evidence-gated execution across different reasoning horizons.
 
 ## Engineering decisions
 
@@ -77,6 +79,22 @@ Then open [http://127.0.0.1:8001/dashboard/](http://127.0.0.1:8001/dashboard/).
 
 - **Run GPT analysis** makes live API calls and uses paid API credits.
 - **Run offline demo** exercises the complete evidence, scoring, policy, and approval flow without an API call.
+- Select **Coordinated Shilling Attack**, choose a horizon, and run **RS safety loop** to inspect the step-by-step trajectory and automatic stale-evidence rollback.
+- **Compare horizons** runs seeded fault-injection diagnostics locally. These simulated results demonstrate the evaluation harness and are not claims about live-model performance.
+
+## Recommender safety mode
+
+The recommender scenario turns the one-pass incident workflow into an explicit action/observation loop. The agent inspects exposure, suspicious profiles, interaction bursts, and model history; compares competing hypotheses; saves a checkpoint; rejects a deliberately stale snapshot; evaluates a profile-quarantine action in a sandbox; applies a simulated 5% canary; and verifies four safety postconditions over the selected horizon.
+
+The simulator tracks:
+
+- target-item exposure;
+- catalog coverage;
+- suspicious-profile ratio;
+- group exposure gap;
+- cumulative harm, rollbacks, unsafe actions, and recovery success.
+
+No account, recommendation model, or production service is connected or changed. The real quarantine proposal remains behind the existing named-human approval boundary.
 
 The `.env` file is ignored by Git. Never commit or paste an API key into source code.
 
@@ -98,6 +116,8 @@ It covers specialist agents, evidence scoring, policy enforcement, run storage, 
 | `POST` | `/api/scenarios/{id}/activate` | Switch the active local scenario |
 | `POST` | `/api/investigations/active/run` | Run the live GPT investigation |
 | `POST` | `/api/demo/active-decision` | Run the deterministic offline demo |
+| `POST` | `/api/recommender-safety/active/run` | Run a 10, 20, or 50-step RS safety investigation |
+| `POST` | `/api/recommender-safety/benchmark` | Compare seeded baseline and evidence-gated reliability |
 | `POST` | `/api/investigations/{run_id}/approve` | Record a named human approval |
 | `GET` | `/docs` | OpenAPI documentation |
 
@@ -107,7 +127,7 @@ This repository uses simulated incidents and local scenario data. Generated reme
 
 ## Current scope and trade-offs
 
-This is a portfolio prototype with production-inspired boundaries, not a deployed incident-management service. Investigation runs and approvals are stored in memory, the API has no user authentication, and the scenarios use local fixtures rather than live telemetry. A production version would add durable storage, role-based access, secrets management, observability, model evaluations, and integrations with incident and deployment systems.
+This is a portfolio and research prototype with production-inspired boundaries, not a deployed incident-management service. Investigation runs and approvals are stored in memory, the API has no user authentication, and the scenarios use local fixtures and a deterministic recommender simulator rather than live telemetry. The reliability benchmark uses seeded fault injection; empirical claims about LLM reliability require repeated live-model experiments and confidence intervals. A production version would add durable storage, role-based access, secrets management, observability, calibrated model evaluations, and integrations with incident and deployment systems.
 
 ## Project structure
 
@@ -116,6 +136,7 @@ agent/            specialist agents, judge, policy guard, and orchestration
 dashboard/        dependency-free dashboard
 knowledge_base/   runbooks, architecture notes, and postmortems
 rag/              hybrid retrieval pipeline
+rs_safety/        sequential RS simulator and reliability benchmark
 scenarios/        isolated incident fixtures
 tests/            regression and API smoke tests
 main.py           FastAPI application

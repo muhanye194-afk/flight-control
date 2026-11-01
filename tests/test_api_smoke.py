@@ -15,7 +15,7 @@ def main() -> None:
     assert scenarios_response.status_code == 200
 
     scenarios_body = scenarios_response.json()
-    assert len(scenarios_body["scenarios"]) == 3
+    assert len(scenarios_body["scenarios"]) == 4
 
     config_response = client.get("/api/config")
     assert config_response.status_code == 200
@@ -35,6 +35,29 @@ def main() -> None:
     incident_response = client.get("/api/incidents/active")
     assert incident_response.status_code == 200
     assert incident_response.json()["service"] == "edge-routing-service"
+
+    activate_rs_response = client.post(
+        "/api/scenarios/recommender_shilling_attack/activate"
+    )
+    assert activate_rs_response.status_code == 200
+
+    long_horizon_response = client.post(
+        "/api/recommender-safety/active/run",
+        json={"horizon": 10, "inject_stale_evidence": True},
+    )
+    assert long_horizon_response.status_code == 200
+    long_horizon_body = long_horizon_response.json()
+    assert len(long_horizon_body["reasoning_steps"]) == 10
+    assert long_horizon_body["reliability_metrics"][
+        "recovery_success"
+    ]
+
+    benchmark_response = client.post(
+        "/api/recommender-safety/benchmark",
+        json={"horizons": [10, 20, 50], "episodes": 10, "seed": 7},
+    )
+    assert benchmark_response.status_code == 200
+    assert len(benchmark_response.json()["rows"]) == 6
 
     missing_run_response = client.get("/api/investigations/not_found")
     assert missing_run_response.status_code == 404

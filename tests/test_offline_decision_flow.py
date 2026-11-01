@@ -22,6 +22,7 @@ CASES = [
     ("payment_connection_pool", "database_session_leak"),
     ("video_edge_routing", "routing_misconfiguration"),
     ("feed_cache_cascade", "cache_key_compatibility_failure"),
+    ("recommender_shilling_attack", "recommendation_shilling_attack"),
 ]
 
 
@@ -150,7 +151,7 @@ async def main() -> None:
             expected_hypothesis_id=expected_hypothesis_id,
         )
 
-    print("3 个场景的离线决策闭环测试全部通过。")
+    print("4 个场景的离线决策闭环测试全部通过。")
 
 
 if __name__ == "__main__":

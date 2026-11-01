@@ -15,6 +15,7 @@ SCENARIO_IDS = [
     "payment_connection_pool",
     "video_edge_routing",
     "feed_cache_cascade",
+    "recommender_shilling_attack",
 ]
 
 
@@ -56,7 +57,7 @@ async def main() -> None:
     for scenario_id in SCENARIO_IDS:
         await verify_scenario(scenario_id)
 
-    print("3 个场景的 Specialist Agent 回归测试全部通过。")
+    print("4 个场景的 Specialist Agent 回归测试全部通过。")
 
 
 if __name__ == "__main__":

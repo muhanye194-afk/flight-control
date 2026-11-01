@@ -74,6 +74,54 @@ class PolicyDecision(BaseModel):
     ]
     reason: str
 
+
+class ReasoningStep(BaseModel):
+    step_number: int = Field(ge=1)
+    action_type: Literal[
+        "observe",
+        "reason",
+        "checkpoint",
+        "simulate",
+        "verify",
+        "rollback",
+    ]
+    action: str
+    observation: str
+    status: Literal[
+        "completed",
+        "checkpointed",
+        "rejected",
+        "rolled_back",
+        "verified",
+    ]
+    confidence: float = Field(ge=0, le=1)
+    evidence_ids: List[str] = Field(default_factory=list)
+    hypothesis_id: Optional[str] = None
+    safety_note: Optional[str] = None
+
+
+class InvestigationCheckpoint(BaseModel):
+    checkpoint_id: str
+    step_number: int = Field(ge=1)
+    selected_hypothesis_id: Optional[str] = None
+    confidence: float = Field(ge=0, le=1)
+    evidence_ids: List[str] = Field(default_factory=list)
+    cumulative_harm: float = Field(ge=0)
+    reason: str
+
+
+class ReliabilityMetrics(BaseModel):
+    horizon: int = Field(ge=1)
+    steps_completed: int = Field(ge=0)
+    root_cause_correct: bool
+    unsafe_action_count: int = Field(ge=0)
+    first_error_step: Optional[int] = Field(default=None, ge=1)
+    rollback_count: int = Field(ge=0)
+    checkpoint_count: int = Field(ge=0)
+    cumulative_harm: float = Field(ge=0)
+    recovery_success: bool
+    reliability_score: float = Field(ge=0, le=1)
+
 class AgentFinding(BaseModel):
     agent_name: str
     status: Literal["completed", "needs_more_evidence"]

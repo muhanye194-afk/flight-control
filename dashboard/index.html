@@ -40,8 +40,8 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    button, input { font: inherit; }
-    button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
     .app { max-width: 1500px; margin: 0 auto; padding: 22px 28px 48px; }
 
@@ -139,6 +139,17 @@
     .demo-button:hover { background: #313431; }
     .refresh-button { border-color: var(--line-strong); background: var(--paper); }
     .refresh-button:hover { border-color: var(--ink); }
+
+    .horizon-select {
+      min-height: 36px;
+      padding: 7px 28px 7px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      color: var(--ink);
+      background: var(--paper);
+      font-size: 11px;
+      font-weight: 700;
+    }
 
     .layout {
       display: grid;
@@ -351,6 +362,60 @@
 
     .decision-panel { margin-bottom: 14px; border-top: 3px solid var(--blue); }
 
+    .long-horizon-panel { margin-bottom: 14px; border-top: 3px solid var(--green); }
+
+    .reliability-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .reliability-card {
+      padding: 13px;
+      border: 1px solid var(--line);
+      background: var(--paper-strong);
+    }
+
+    .reliability-card strong {
+      display: block;
+      margin-top: 7px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    .timeline {
+      display: grid;
+      max-height: 520px;
+      gap: 0;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+    }
+
+    .timeline-step {
+      display: grid;
+      grid-template-columns: 52px minmax(150px, .48fr) minmax(260px, 1fr) 92px;
+      gap: 12px;
+      align-items: start;
+      padding: 11px 4px;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+    }
+
+    .timeline-step.is-rollback { background: var(--accent-soft); }
+    .timeline-step.is-verified { background: var(--green-soft); }
+    .step-number { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; }
+    .step-action { font-weight: 700; }
+    .step-observation { color: var(--muted); line-height: 1.55; }
+    .step-status { color: var(--blue); font-size: 9px; font-weight: 760; text-align: right; text-transform: uppercase; }
+
+    .benchmark-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .benchmark-table th, .benchmark-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+    .benchmark-table th:first-child, .benchmark-table td:first-child { text-align: left; }
+    .benchmark-table th { color: var(--faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+    .benchmark-note { margin-top: 10px; color: var(--faint); font-size: 9px; }
+
     .decision-state {
       min-height: 26px;
       padding: 5px 8px;
@@ -463,9 +528,11 @@
       .top-actions, .incident-status { justify-content: flex-start; text-align: left; }
       .hero { min-height: 0; padding: 20px; }
       .hero::after { display: none; }
-      .scenario-list, .metrics, .two-column, .bottom-grid, .decision-grid { grid-template-columns: 1fr; }
+      .scenario-list, .metrics, .two-column, .bottom-grid, .decision-grid, .reliability-grid { grid-template-columns: 1fr; }
       .approval-form { flex-direction: column; }
       .item-title { white-space: normal; }
+      .timeline-step { grid-template-columns: 42px 1fr; }
+      .step-observation, .step-status { grid-column: 2; text-align: left; }
     }
   </style>
 </head>
@@ -489,6 +556,13 @@
         <span id="model-status" class="pill model-status">Checking GPT connection</span>
         <button id="live-button" class="button demo-button">Run GPT analysis</button>
         <button id="demo-button" class="button refresh-button">Run offline demo</button>
+        <select id="horizon-select" class="horizon-select" aria-label="Reasoning horizon" disabled>
+          <option value="10">10 steps</option>
+          <option value="20" selected>20 steps</option>
+          <option value="50">50 steps</option>
+        </select>
+        <button id="long-horizon-button" class="button demo-button" disabled>Run RS safety loop</button>
+        <button id="benchmark-button" class="button refresh-button" disabled>Compare horizons</button>
         <button id="refresh-button" class="button refresh-button">Refresh</button>
       </div>
     </header>
@@ -596,6 +670,17 @@
           </div>
         </section>
 
+        <section id="long-horizon-panel" class="panel long-horizon-panel" hidden>
+          <div class="section-head">
+            <h2>Long-horizon reliability</h2>
+            <span id="long-horizon-state">simulation not run</span>
+          </div>
+
+          <div id="reliability-summary"></div>
+          <div id="reasoning-timeline"></div>
+          <div id="benchmark-content"></div>
+        </section>
+
         <section class="bottom-grid">
           <article class="panel">
             <div class="section-head">
@@ -617,7 +702,7 @@
             <div class="notice">
               <strong>Offline checks passed</strong>
               <p>
-                Three scenarios validated evidence scoring, policy checks and approval records.
+                Four scenarios validate evidence scoring, policy checks, approval records and RS safety.
               </p>
             </div>
 
@@ -644,6 +729,9 @@
     const refreshButton = $("refresh-button");
     const demoButton = $("demo-button");
     const liveButton = $("live-button");
+    const longHorizonButton = $("long-horizon-button");
+    const benchmarkButton = $("benchmark-button");
+    const horizonSelect = $("horizon-select");
     const errorBanner = $("error-banner");
     const decisionContent = $("decision-content");
     const decisionState = $("decision-state");
@@ -651,7 +739,13 @@
     const apiStatusText = $("api-status-text");
     const modelStatus = $("model-status");
     const investigationSummary = $("investigation-summary");
+    const longHorizonPanel = $("long-horizon-panel");
+    const longHorizonState = $("long-horizon-state");
+    const reliabilitySummary = $("reliability-summary");
+    const reasoningTimeline = $("reasoning-timeline");
+    const benchmarkContent = $("benchmark-content");
     let liveAnalysisAvailable = false;
+    let activeScenarioDomain = null;
 
     function setInvestigationStatus(state) {
       const copy = {
@@ -713,6 +807,11 @@
       decisionContent.innerHTML = `
         Scenario evidence is loaded above. Run GPT analysis for a live decision, or use the offline demo.
       `;
+
+      longHorizonPanel.hidden = true;
+      reliabilitySummary.innerHTML = "";
+      reasoningTimeline.innerHTML = "";
+      benchmarkContent.innerHTML = "";
     }
 
     function renderScenarios(scenarios, activeScenario) {
@@ -860,9 +959,12 @@
       }).join("");
 
       const liveRun = data.execution_mode === "live_gpt";
-      decisionState.textContent = liveRun
-        ? `${data.model || "GPT"} decision ready`
-        : "Offline decision ready";
+      const longHorizonRun = data.execution_mode === "long_horizon_simulation";
+      decisionState.textContent = longHorizonRun
+        ? `${data.reliability_metrics?.horizon || "Multi"}-step simulation ready`
+        : liveRun
+          ? `${data.model || "GPT"} decision ready`
+          : "Offline decision ready";
       decisionState.classList.add("ready");
       setInvestigationStatus("complete");
 
@@ -931,6 +1033,95 @@
       }
     }
 
+    function renderLongHorizon(data) {
+      const result = data.reliability_metrics || {};
+      const steps = data.reasoning_steps || [];
+
+      longHorizonPanel.hidden = false;
+      longHorizonState.textContent =
+        `${result.steps_completed || steps.length}/${result.horizon || steps.length} steps complete`;
+
+      reliabilitySummary.innerHTML = `
+        <div class="reliability-grid">
+          <article class="reliability-card">
+            <span class="small-label">Reliability score</span>
+            <strong>${Math.round((result.reliability_score || 0) * 100)}%</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Sandbox recovery</span>
+            <strong>${result.recovery_success ? "Passed" : "Failed"}</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Rollback count</span>
+            <strong>${escapeHtml(result.rollback_count || 0)}</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Unsafe actions</span>
+            <strong>${escapeHtml(result.unsafe_action_count || 0)}</strong>
+          </article>
+        </div>
+      `;
+
+      reasoningTimeline.innerHTML = `
+        <p class="small-label">Reasoning trajectory</p>
+        <div class="timeline">
+          ${steps.map((step) => {
+            const statusClass = step.status === "rolled_back"
+              ? "is-rollback"
+              : step.status === "verified"
+                ? "is-verified"
+                : "";
+
+            return `
+              <div class="timeline-step ${statusClass}">
+                <span class="step-number">#${escapeHtml(step.step_number)}</span>
+                <span class="step-action">${escapeHtml(humanize(step.action))}</span>
+                <span class="step-observation">
+                  ${escapeHtml(step.observation)}
+                  ${step.safety_note ? `<br><em>${escapeHtml(step.safety_note)}</em>` : ""}
+                </span>
+                <span class="step-status">${escapeHtml(humanize(step.status))}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function renderBenchmark(data) {
+      longHorizonPanel.hidden = false;
+      longHorizonState.textContent =
+        `${data.episodes_per_condition} seeded episodes per condition`;
+      benchmarkContent.innerHTML = `
+        <p class="small-label" style="margin-top: 18px;">Horizon comparison</p>
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>System</th>
+              <th>Steps</th>
+              <th>Success</th>
+              <th>Unsafe episodes</th>
+              <th>Avg harm</th>
+              <th>Recovered errors</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(data.rows || []).map((row) => `
+              <tr>
+                <td>${escapeHtml(humanize(row.system))}</td>
+                <td>${escapeHtml(row.horizon)}</td>
+                <td>${Math.round(row.success_rate * 100)}%</td>
+                <td>${Math.round(row.unsafe_action_rate * 100)}%</td>
+                <td>${Number(row.average_cumulative_harm).toFixed(3)}</td>
+                <td>${escapeHtml(row.recovered_error_count)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        <p class="benchmark-note">${escapeHtml(data.disclaimer)}</p>
+      `;
+    }
+
     async function approveAction(runId, actionId, approver) {
       if (!approver) {
         showError("Please enter an approver name.");
@@ -980,6 +1171,12 @@
         );
 
         renderIncident(incident);
+
+        activeScenarioDomain = scenarioData.active_scenario?.domain || null;
+        const recommenderScenario = activeScenarioDomain === "recommender-systems";
+        longHorizonButton.disabled = !recommenderScenario;
+        benchmarkButton.disabled = !recommenderScenario;
+        horizonSelect.disabled = !recommenderScenario;
 
         apiStatus.classList.remove("api-offline");
         apiStatusText.textContent = "Local API online";
@@ -1066,9 +1263,79 @@
       }
     }
 
+    async function runLongHorizonAnalysis() {
+      try {
+        clearError();
+        longHorizonButton.disabled = true;
+        benchmarkButton.disabled = true;
+        horizonSelect.disabled = true;
+        longHorizonButton.textContent = "Running safety loop…";
+        setInvestigationStatus("running");
+
+        const result = await requestJson(
+          "/api/recommender-safety/active/run",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              horizon: Number(horizonSelect.value),
+              inject_stale_evidence: true,
+            }),
+          }
+        );
+
+        renderDecision(result);
+        renderLongHorizon(result);
+      } catch (error) {
+        resetDecisionPanel();
+        showError(`RS safety loop failed. ${error.message}`);
+      } finally {
+        const enabled = activeScenarioDomain === "recommender-systems";
+        longHorizonButton.disabled = !enabled;
+        benchmarkButton.disabled = !enabled;
+        horizonSelect.disabled = !enabled;
+        longHorizonButton.textContent = "Run RS safety loop";
+      }
+    }
+
+    async function runReliabilityBenchmark() {
+      try {
+        clearError();
+        benchmarkButton.disabled = true;
+        longHorizonButton.disabled = true;
+        benchmarkButton.textContent = "Comparing…";
+        longHorizonPanel.hidden = false;
+        longHorizonState.textContent = "injecting seeded trajectory faults";
+
+        const result = await requestJson(
+          "/api/recommender-safety/benchmark",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              horizons: [10, 20, 50],
+              episodes: 80,
+              seed: 11,
+            }),
+          }
+        );
+
+        renderBenchmark(result);
+      } catch (error) {
+        showError(`Reliability benchmark failed. ${error.message}`);
+      } finally {
+        const enabled = activeScenarioDomain === "recommender-systems";
+        benchmarkButton.disabled = !enabled;
+        longHorizonButton.disabled = !enabled;
+        benchmarkButton.textContent = "Compare horizons";
+      }
+    }
+
     refreshButton.addEventListener("click", loadDashboard);
     demoButton.addEventListener("click", runOfflineDemo);
     liveButton.addEventListener("click", runLiveAnalysis);
+    longHorizonButton.addEventListener("click", runLongHorizonAnalysis);
+    benchmarkButton.addEventListener("click", runReliabilityBenchmark);
 
     resetDecisionPanel();
     loadDashboard();

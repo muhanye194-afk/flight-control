@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +12,7 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent.demo_mode import run_offline_demo
 from agent.llm_client import MODEL_NAME
@@ -28,8 +28,14 @@ from agent.run_store import (
 from incident_tools import load_incident
 from scenario_registry import (
     activate_scenario,
+    get_active_ground_truth,
+    get_active_incident as get_active_scenario_incident,
     get_active_scenario_summary,
     list_scenarios,
+)
+from rs_safety.benchmark import run_reliability_benchmark
+from rs_safety.long_horizon import (
+    run_recommender_safety_investigation,
 )
 
 
@@ -52,6 +58,19 @@ app.mount(
 class ApprovalRequest(BaseModel):
     action_ids: List[str]
     approver: str
+
+
+class LongHorizonRequest(BaseModel):
+    horizon: Literal[10, 20, 50] = 20
+    inject_stale_evidence: bool = True
+
+
+class ReliabilityBenchmarkRequest(BaseModel):
+    horizons: List[Literal[10, 20, 50]] = Field(
+        default_factory=lambda: [10, 20, 50]
+    )
+    episodes: int = Field(default=40, ge=5, le=500)
+    seed: int = 7
 
 
 def format_investigation_result(state):
@@ -92,6 +111,19 @@ def format_investigation_result(state):
         "approved_action_ids": state.approved_action_ids,
         "tool_trace": state.tool_trace,
         "audit_log": state.audit_log,
+        "reasoning_steps": [
+            item.model_dump()
+            for item in state.reasoning_steps
+        ],
+        "checkpoints": [
+            item.model_dump()
+            for item in state.checkpoints
+        ],
+        "reliability_metrics": (
+            state.reliability_metrics.model_dump()
+            if state.reliability_metrics is not None
+            else None
+        ),
     }
 
 
@@ -225,7 +257,54 @@ async def run_active_offline_demo():
         raise HTTPException(
             status_code=400,
             detail=str(error),
+        ) from error
+
+
+@app.post("/api/recommender-safety/active/run")
+def run_active_recommender_safety_investigation(
+    request: LongHorizonRequest,
+):
+    scenario = get_active_scenario_summary()
+
+    if scenario["domain"] != "recommender-systems":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Long-horizon RS safety requires an active "
+                "recommender-systems scenario."
+            ),
         )
+
+    state = run_recommender_safety_investigation(
+        scenario_id=scenario["scenario_id"],
+        incident=get_active_scenario_incident(),
+        ground_truth=get_active_ground_truth(),
+        horizon=request.horizon,
+        inject_stale_evidence=request.inject_stale_evidence,
+    )
+    save_run(state)
+
+    response = format_investigation_result(state)
+    response["execution_mode"] = "long_horizon_simulation"
+    response["simulation_only"] = True
+    return response
+
+
+@app.post("/api/recommender-safety/benchmark")
+def benchmark_recommender_safety(
+    request: ReliabilityBenchmarkRequest,
+):
+    try:
+        return run_reliability_benchmark(
+            horizons=request.horizons,
+            episodes=request.episodes,
+            seed=request.seed,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
 
 
 @app.get("/api/investigations/{run_id}")

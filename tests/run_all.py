@@ -9,6 +9,7 @@ TEST_MODULES = [
     "tests.test_run_store",
     "tests.test_specialist_agents",
     "tests.test_offline_decision_flow",
+    "tests.test_recommender_safety",
     "tests.test_api_smoke",
     "tests.test_embeddings",
 ]
@@ -20,6 +21,7 @@ def main() -> None:
         "FLIGHT_CONTROL_EMBEDDING_BACKEND",
         "hash",
     )
+    test_environment.setdefault("PYTHONUTF8", "1")
 
     for test_module in TEST_MODULES:
         print(f"\nRunning {test_module}...")
