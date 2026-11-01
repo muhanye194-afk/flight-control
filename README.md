@@ -31,22 +31,52 @@ Flight Control is designed as a reliability engineering portfolio project—not 
 ## Decision flow
 
 ```mermaid
-flowchart LR
-    A[P1 scenario] --> B[Incident Commander]
-    B --> C1[Observability]
-    B --> C2[Change Intelligence]
-    B --> C3[Knowledge Retrieval]
-    C1 --> D[Evidence Pool]
-    C2 --> D
-    C3 --> D
-    D --> E[GPT Hypothesis Agent]
-    E --> F[GPT Skeptic]
-    F --> G[Evidence Judge]
-    G --> H[GPT Remediation Planner]
-    H --> I[Policy Guard]
-    I -->|read only| J[Allowed]
-    I -->|production change| K[Human approval]
+flowchart TD
+    A[Active incident scenario] --> M{Run mode}
+
+    M -->|incident response| B
+    M -->|controlled RS improvement| S
+
+    subgraph IR[Evidence-first incident response]
+        direction LR
+        B[Incident Commander] --> C1[Observability]
+        B --> C2[Change Intelligence]
+        B --> C3[Knowledge Retrieval]
+        C1 --> D[Evidence Pool]
+        C2 --> D
+        C3 --> D
+        D --> E[GPT Hypothesis Agent]
+        E --> F[GPT Skeptic]
+        F --> G[Evidence Judge]
+        G --> H[GPT Remediation Planner]
+        H --> I[Policy Guard]
+        I -->|read only| J[Allowed]
+        I -->|production change| K[Human approval]
+    end
+
+    subgraph SI[Controlled strategy self-improvement]
+        direction LR
+        S[Active strategy version] --> L[Live LLM action and observation episodes]
+        L --> V[Deterministic safety evaluator]
+        V --> R[First-failure report]
+        R --> O[Constrained strategy optimizer]
+        O --> C[Prompt, evidence threshold, and checkpoint candidates]
+        C --> DD[Development episodes]
+        DD --> Q[Select best candidate]
+        Q --> T[Unseen holdout episodes]
+        T --> P{Improves dev and holdout<br/>with no safety regression?}
+        P -->|yes| N[Promote and persist version]
+        P -->|no| X[Reject candidate and keep incumbent]
+        N --> S
+        X --> S
+    end
+
+    U[Immutable source code, action allowlist,<br/>policy, and human boundary]
+    U -. constrains .-> V
+    U -. constrains .-> O
 ```
+
+The improvement branch changes only bounded strategy parameters. The evaluator, action vocabulary, source code, and human-approval boundary remain outside the optimization loop.
 
 ## Run locally
 
