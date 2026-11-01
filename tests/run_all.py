@@ -10,6 +10,7 @@ TEST_MODULES = [
     "tests.test_specialist_agents",
     "tests.test_offline_decision_flow",
     "tests.test_recommender_safety",
+    "tests.test_self_improvement",
     "tests.test_api_smoke",
     "tests.test_embeddings",
 ]

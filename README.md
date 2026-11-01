@@ -19,6 +19,7 @@ Flight Control is designed as a reliability engineering portfolio project—not 
 - A responsive dashboard with both live GPT analysis and a no-cost offline demo.
 - A deterministic long-horizon recommender-safety loop with 10, 20, or 50 reasoning steps, checkpoint rollback, sandbox canary actions, and delayed-feedback verification.
 - A seeded reliability benchmark comparing an unguarded baseline with evidence-gated execution across different reasoning horizons.
+- A controlled self-improvement loop that evaluates a live LLM strategy, diagnoses its first failure, proposes bounded strategy revisions, and promotes a revision only after it improves both development and unseen holdout episodes.
 
 ## Engineering decisions
 
@@ -81,6 +82,7 @@ Then open [http://127.0.0.1:8001/dashboard/](http://127.0.0.1:8001/dashboard/).
 - **Run offline demo** exercises the complete evidence, scoring, policy, and approval flow without an API call.
 - Select **Coordinated Shilling Attack**, choose a horizon, and run **RS safety loop** to inspect the step-by-step trajectory and automatic stale-evidence rollback.
 - **Compare horizons** runs seeded fault-injection diagnostics locally. These simulated results demonstrate the evaluation harness and are not claims about live-model performance.
+- **Improve strategy** runs the live-model evaluation and revision loop. It makes multiple paid API calls and asks for confirmation before starting.
 
 ## Recommender safety mode
 
@@ -96,6 +98,18 @@ The simulator tracks:
 
 No account, recommendation model, or production service is connected or changed. The real quarantine proposal remains behind the existing named-human approval boundary.
 
+## Controlled self-improvement
+
+The self-improvement module closes the feedback loop without giving the model unrestricted access to its source code. A live LLM first acts step by step inside the recommender-safety environment. Deterministic checks identify the earliest protocol or safety failure, and the model then proposes a new strategy version constrained to three fields:
+
+- system-prompt instructions;
+- the minimum evidence threshold;
+- the checkpoint interval.
+
+Every candidate is evaluated on development episodes and separate holdout variants containing stale or contradictory evidence. A candidate is promoted only when it exceeds the incumbent by the configured minimum on both sets, introduces no unsafe-action regression, keeps harm within the incumbent bound, and does not reduce holdout root-cause accuracy. Otherwise it is rejected. Accepted versions and their evaluation summaries are stored in `.flight_control/strategy_registry.json`, while the previous active version remains available for rollback.
+
+The action vocabulary, evaluator, safety constraints, human-approval boundary, and application source code are immutable during this loop. This is therefore constrained strategy adaptation—not autonomous source-code rewriting. The dashboard reports live model-call counts, development and holdout results, the promotion decision, and the active strategy version. Live results depend on the configured model and should be repeated across more seeds before making empirical reliability claims.
+
 The `.env` file is ignored by Git. Never commit or paste an API key into source code.
 
 ## Tests
@@ -106,7 +120,7 @@ The regression suite is intentionally runnable without `pytest` or an OpenAI key
 python tests/run_all.py
 ```
 
-It covers specialist agents, evidence scoring, policy enforcement, run storage, deterministic embeddings, the offline decision flow, and API smoke checks. GitHub Actions runs the same suite on every push and pull request.
+It covers specialist agents, evidence scoring, policy enforcement, run storage, deterministic embeddings, the offline decision flow, controlled strategy promotion, and API smoke checks. The self-improvement tests use injected deterministic model doubles, so CI does not require an API key or incur API charges. GitHub Actions runs the same suite on every push and pull request.
 
 ## API highlights
 
@@ -118,6 +132,9 @@ It covers specialist agents, evidence scoring, policy enforcement, run storage, 
 | `POST` | `/api/demo/active-decision` | Run the deterministic offline demo |
 | `POST` | `/api/recommender-safety/active/run` | Run a 10, 20, or 50-step RS safety investigation |
 | `POST` | `/api/recommender-safety/benchmark` | Compare seeded baseline and evidence-gated reliability |
+| `GET` | `/api/self-improvement/strategies` | Inspect the active and historical strategy versions |
+| `POST` | `/api/self-improvement/run` | Run live evaluation, bounded revision, and holdout-gated promotion |
+| `GET` | `/api/self-improvement/runs/{run_id}` | Retrieve a completed improvement run |
 | `POST` | `/api/investigations/{run_id}/approve` | Record a named human approval |
 | `GET` | `/docs` | OpenAPI documentation |
 
@@ -127,7 +144,7 @@ This repository uses simulated incidents and local scenario data. Generated reme
 
 ## Current scope and trade-offs
 
-This is a portfolio and research prototype with production-inspired boundaries, not a deployed incident-management service. Investigation runs and approvals are stored in memory, the API has no user authentication, and the scenarios use local fixtures and a deterministic recommender simulator rather than live telemetry. The reliability benchmark uses seeded fault injection; empirical claims about LLM reliability require repeated live-model experiments and confidence intervals. A production version would add durable storage, role-based access, secrets management, observability, calibrated model evaluations, and integrations with incident and deployment systems.
+This is a portfolio and research prototype with production-inspired boundaries, not a deployed incident-management service. Investigation and improvement-run details are stored in memory, strategy metadata is stored in a local JSON registry, the API has no user authentication, and the scenarios use local fixtures and a deterministic recommender simulator rather than live telemetry. The reliability benchmark uses seeded fault injection; the controlled-improvement path uses real model decisions but currently has a small local scenario family. Empirical claims about LLM reliability require repeated experiments, more diverse holdouts, and confidence intervals. A production version would add durable storage, role-based access, secrets management, observability, calibrated model evaluations, and integrations with incident and deployment systems.
 
 ## Project structure
 
@@ -136,7 +153,7 @@ agent/            specialist agents, judge, policy guard, and orchestration
 dashboard/        dependency-free dashboard
 knowledge_base/   runbooks, architecture notes, and postmortems
 rag/              hybrid retrieval pipeline
-rs_safety/        sequential RS simulator and reliability benchmark
+rs_safety/        RS simulator, reliability benchmark, evaluator, and strategy registry
 scenarios/        isolated incident fixtures
 tests/            regression and API smoke tests
 main.py           FastAPI application

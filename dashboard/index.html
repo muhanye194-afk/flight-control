@@ -363,6 +363,7 @@
     .decision-panel { margin-bottom: 14px; border-top: 3px solid var(--blue); }
 
     .long-horizon-panel { margin-bottom: 14px; border-top: 3px solid var(--green); }
+    .self-improvement-panel { margin-bottom: 14px; border-top: 3px solid var(--accent); }
 
     .reliability-grid {
       display: grid;
@@ -415,6 +416,22 @@
     .benchmark-table th:first-child, .benchmark-table td:first-child { text-align: left; }
     .benchmark-table th { color: var(--faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
     .benchmark-note { margin-top: 10px; color: var(--faint); font-size: 9px; }
+
+    .promotion-result {
+      margin: 12px 0;
+      padding: 12px;
+      border-left: 3px solid var(--green);
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .promotion-result.rejected {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
 
     .decision-state {
       min-height: 26px;
@@ -563,6 +580,7 @@
         </select>
         <button id="long-horizon-button" class="button demo-button" disabled>Run RS safety loop</button>
         <button id="benchmark-button" class="button refresh-button" disabled>Compare horizons</button>
+        <button id="improvement-button" class="button refresh-button" disabled>Improve strategy</button>
         <button id="refresh-button" class="button refresh-button">Refresh</button>
       </div>
     </header>
@@ -681,6 +699,23 @@
           <div id="benchmark-content"></div>
         </section>
 
+        <section id="self-improvement-panel" class="panel self-improvement-panel" hidden>
+          <div class="section-head">
+            <h2>Controlled self-improvement</h2>
+            <span id="self-improvement-state">not run</span>
+          </div>
+
+          <div class="safety" style="margin: 0 0 14px;">
+            <strong>Bounded live evaluation</strong>
+            <p>
+              The optimizer may change only the prompt, evidence threshold and checkpoint interval.
+              Source code and safety constraints are immutable. This action uses paid live model calls.
+            </p>
+          </div>
+
+          <div id="self-improvement-content"></div>
+        </section>
+
         <section class="bottom-grid">
           <article class="panel">
             <div class="section-head">
@@ -731,6 +766,7 @@
     const liveButton = $("live-button");
     const longHorizonButton = $("long-horizon-button");
     const benchmarkButton = $("benchmark-button");
+    const improvementButton = $("improvement-button");
     const horizonSelect = $("horizon-select");
     const errorBanner = $("error-banner");
     const decisionContent = $("decision-content");
@@ -744,7 +780,11 @@
     const reliabilitySummary = $("reliability-summary");
     const reasoningTimeline = $("reasoning-timeline");
     const benchmarkContent = $("benchmark-content");
+    const selfImprovementPanel = $("self-improvement-panel");
+    const selfImprovementState = $("self-improvement-state");
+    const selfImprovementContent = $("self-improvement-content");
     let liveAnalysisAvailable = false;
+    let selfImprovementAvailable = false;
     let activeScenarioDomain = null;
 
     function setInvestigationStatus(state) {
@@ -812,6 +852,8 @@
       reliabilitySummary.innerHTML = "";
       reasoningTimeline.innerHTML = "";
       benchmarkContent.innerHTML = "";
+      selfImprovementPanel.hidden = true;
+      selfImprovementContent.innerHTML = "";
     }
 
     function renderScenarios(scenarios, activeScenario) {
@@ -1122,6 +1164,84 @@
       `;
     }
 
+    function renderSelfImprovement(data) {
+      selfImprovementPanel.hidden = false;
+      selfImprovementState.textContent = data.promoted_any
+        ? "new strategy promoted"
+        : "promotion gate kept incumbent";
+
+      const rounds = (data.rounds || []).map((round) => {
+        const candidateDev = (round.candidate_dev_evaluations || []).find(
+          (item) => item.strategy_version_id === round.selected_candidate_id
+        );
+        const rows = [
+          ["Incumbent · dev", round.incumbent_dev],
+          ["Candidate · dev", candidateDev],
+          ["Incumbent · holdout", round.incumbent_holdout],
+          ["Candidate · holdout", round.candidate_holdout],
+        ].filter(([, evaluation]) => Boolean(evaluation));
+
+        return `
+          <div class="action-heading">
+            <span>Round ${escapeHtml(round.round_number)}</span>
+            <span>${escapeHtml(round.selected_candidate_id || "no candidate")}</span>
+          </div>
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Evaluation</th>
+                <th>Success</th>
+                <th>Root cause</th>
+                <th>Unsafe</th>
+                <th>Avg harm</th>
+                <th>Errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(([label, evaluation]) => `
+                <tr>
+                  <td>${escapeHtml(label)}</td>
+                  <td>${Math.round(evaluation.success_rate * 100)}%</td>
+                  <td>${Math.round(evaluation.root_cause_accuracy * 100)}%</td>
+                  <td>${Math.round(evaluation.unsafe_action_rate * 100)}%</td>
+                  <td>${Number(evaluation.average_cumulative_harm).toFixed(3)}</td>
+                  <td>${escapeHtml(evaluation.total_errors)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <div class="promotion-result ${round.promoted ? "" : "rejected"}">
+            ${escapeHtml(round.decision_reason)}
+          </div>
+        `;
+      }).join("");
+
+      selfImprovementContent.innerHTML = `
+        <div class="reliability-grid">
+          <article class="reliability-card">
+            <span class="small-label">Initial strategy</span>
+            <strong style="font-size: 15px;">${escapeHtml(data.initial_version_id)}</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Final strategy</span>
+            <strong style="font-size: 15px;">${escapeHtml(data.final_version_id)}</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Live model calls</span>
+            <strong>${escapeHtml(data.total_llm_calls)}</strong>
+          </article>
+          <article class="reliability-card">
+            <span class="small-label">Result</span>
+            <strong style="font-size: 18px;">${data.promoted_any ? "Promoted" : "No change"}</strong>
+          </article>
+        </div>
+        ${rounds}
+        <p class="benchmark-note">
+          The holdout gate uses unseen trajectory variants. Equal performance is not sufficient for promotion.
+        </p>
+      `;
+    }
+
     async function approveAction(runId, actionId, approver) {
       if (!approver) {
         showError("Please enter an approver name.");
@@ -1182,7 +1302,11 @@
         apiStatusText.textContent = "Local API online";
 
         liveAnalysisAvailable = Boolean(config.live_analysis_available);
+        selfImprovementAvailable = Boolean(config.self_improvement_available);
         liveButton.disabled = !liveAnalysisAvailable;
+        improvementButton.disabled = !(
+          recommenderScenario && selfImprovementAvailable
+        );
         modelStatus.textContent = liveAnalysisAvailable
           ? `${config.model} connected`
           : "GPT key not configured";
@@ -1331,11 +1455,64 @@
       }
     }
 
+    async function runSelfImprovement() {
+      const confirmed = window.confirm(
+        "This bounded run uses approximately 41 paid live model calls. Continue?"
+      );
+      if (!confirmed) return;
+
+      try {
+        clearError();
+        improvementButton.disabled = true;
+        longHorizonButton.disabled = true;
+        benchmarkButton.disabled = true;
+        improvementButton.textContent = "Evaluating strategies…";
+        selfImprovementPanel.hidden = false;
+        selfImprovementState.textContent = "live dev and holdout evaluation running";
+        selfImprovementContent.innerHTML = `
+          <div class="decision-empty">
+            Running the incumbent, generating one constrained candidate, and applying independent holdout gates…
+          </div>
+        `;
+
+        const result = await requestJson(
+          "/api/self-improvement/run",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              horizon: 10,
+              candidates_per_round: 1,
+              dev_episodes: 1,
+              holdout_episodes: 1,
+              max_rounds: 1,
+              minimum_improvement: 0.05,
+              harm_tolerance: 0.02,
+            }),
+          }
+        );
+
+        renderSelfImprovement(result);
+      } catch (error) {
+        selfImprovementState.textContent = "run failed safely";
+        showError(`Controlled self-improvement failed. ${error.message}`);
+      } finally {
+        const recommenderScenario = activeScenarioDomain === "recommender-systems";
+        improvementButton.disabled = !(
+          recommenderScenario && selfImprovementAvailable
+        );
+        longHorizonButton.disabled = !recommenderScenario;
+        benchmarkButton.disabled = !recommenderScenario;
+        improvementButton.textContent = "Improve strategy";
+      }
+    }
+
     refreshButton.addEventListener("click", loadDashboard);
     demoButton.addEventListener("click", runOfflineDemo);
     liveButton.addEventListener("click", runLiveAnalysis);
     longHorizonButton.addEventListener("click", runLongHorizonAnalysis);
     benchmarkButton.addEventListener("click", runReliabilityBenchmark);
+    improvementButton.addEventListener("click", runSelfImprovement);
 
     resetDecisionPanel();
     loadDashboard();

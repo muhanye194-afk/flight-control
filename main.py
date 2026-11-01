@@ -37,6 +37,12 @@ from rs_safety.benchmark import run_reliability_benchmark
 from rs_safety.long_horizon import (
     run_recommender_safety_investigation,
 )
+from rs_safety.self_improvement import (
+    get_improvement_run,
+    run_controlled_self_improvement,
+)
+from rs_safety.strategy_models import ImprovementConfig
+from rs_safety.strategy_registry import STRATEGY_REGISTRY
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -161,6 +167,7 @@ def get_public_config():
     return {
         "model": MODEL_NAME,
         "live_analysis_available": bool(os.getenv("OPENAI_API_KEY")),
+        "self_improvement_available": bool(os.getenv("OPENAI_API_KEY")),
     }
 
 
@@ -303,6 +310,87 @@ def benchmark_recommender_safety(
     except ValueError as error:
         raise HTTPException(
             status_code=400,
+            detail=str(error),
+        ) from error
+
+
+@app.get("/api/self-improvement/strategies")
+def get_self_improvement_strategies():
+    active = STRATEGY_REGISTRY.get_active()
+    return {
+        "active_version_id": active.version_id,
+        "versions": [
+            item.model_dump()
+            for item in STRATEGY_REGISTRY.list_versions()
+        ],
+        "mutation_scope": [
+            "system_prompt",
+            "evidence_threshold",
+            "checkpoint_interval",
+        ],
+        "source_code_mutation_allowed": False,
+    }
+
+
+@app.post("/api/self-improvement/run")
+def run_self_improvement(request: ImprovementConfig):
+    scenario = get_active_scenario_summary()
+    if scenario["domain"] != "recommender-systems":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Controlled self-improvement requires the active "
+                "recommender-systems scenario."
+            ),
+        )
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Controlled self-improvement uses real LLM evaluations. "
+                "Configure OPENAI_API_KEY before running it."
+            ),
+        )
+
+    try:
+        result = run_controlled_self_improvement(
+            config=request,
+            incident=get_active_scenario_incident(),
+        )
+        return result.model_dump()
+    except AuthenticationError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="OpenAI authentication failed during self-improvement.",
+        ) from error
+    except RateLimitError as error:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "OpenAI rate or credit limit reached during "
+                "self-improvement."
+            ),
+        ) from error
+    except (APIConnectionError, APITimeoutError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI is temporarily unreachable.",
+        ) from error
+    except (OpenAIError, RuntimeError) as error:
+        logger.exception("Controlled self-improvement failed")
+        raise HTTPException(
+            status_code=502,
+            detail=str(error),
+        ) from error
+
+
+@app.get("/api/self-improvement/runs/{run_id}")
+def read_self_improvement_run(run_id: str):
+    try:
+        return get_improvement_run(run_id).model_dump()
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
             detail=str(error),
         ) from error
 

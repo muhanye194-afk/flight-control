@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -22,6 +23,7 @@ def main() -> None:
     config_body = config_response.json()
     assert config_body["model"]
     assert "OPENAI_API_KEY" not in config_body
+    assert "self_improvement_available" in config_body
 
     dashboard_response = client.get("/dashboard/")
     assert dashboard_response.status_code == 200
@@ -58,6 +60,22 @@ def main() -> None:
     )
     assert benchmark_response.status_code == 200
     assert len(benchmark_response.json()["rows"]) == 6
+
+    strategies_response = client.get(
+        "/api/self-improvement/strategies"
+    )
+    assert strategies_response.status_code == 200
+    strategies_body = strategies_response.json()
+    assert strategies_body["active_version_id"]
+    assert not strategies_body["source_code_mutation_allowed"]
+
+    with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
+        improvement_response = client.post(
+            "/api/self-improvement/run",
+            json={"horizon": 10},
+        )
+    assert improvement_response.status_code == 400
+    assert "real LLM" in improvement_response.json()["detail"]
 
     missing_run_response = client.get("/api/investigations/not_found")
     assert missing_run_response.status_code == 404
